@@ -1,7 +1,6 @@
-# CS4732 HW1: Colorizing the Prokudin-Gorskii Photo Collection
+Colorizing the Prokudin-Gorskii Photo Collection
 
 **Author:** Sanskriti Bansal
-**Course:** COMS4732 Computer Vision 2  
 
 ## Overview
 
