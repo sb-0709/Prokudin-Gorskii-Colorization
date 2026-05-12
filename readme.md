@@ -1,4 +1,4 @@
-Colorizing the Prokudin-Gorskii Photo Collection
+#**Colorizing the Prokudin-Gorskii Photo Collection**
 
 **Author:** Sanskriti Bansal
 
