@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS4732 HW1: Colorizing the Prokudin-Gorskii Collection</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 5px;
+        }
+        h3 {
+            color: #7f8c8d;
+        }
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .image-container {
+            text-align: center;
+        }
+        .image-container img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .caption {
+            font-size: 0.9em;
+            color: #666;
+            margin-top: 5px;
+        }
+        .offset-info {
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.85em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .comparison {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Colorizing the Prokudin-Gorskii Photo Collection</h1>
+    <p><strong>Author:</strong> Sanskriti Bansal</p>
+    <p><strong>UNI:</strong> sb5215</p>
+    <p><strong>Course:</strong> COMS4732 Computer Vision 2</p>
+    
+    <h2>Overview</h2>
+    <p>
+        This project aims to automatically colorize the Prokudin-Gorskii glass plate images 
+        by aligning the three color channels (B, G, R) and applying various image enhancement 
+        techniques. The goal is to produce color images with minimal visual artifacts.
+    </p>
+
+    <h2>Approach</h2>
+
+    <h3>Alignment Metrics</h3>
+
+    <p>
+        I implemented and compared two similarity metrics for aligning the color channels:
+    </p>
+
+    <h4>1. SSD (Sum of Squared Differences) / L2 Norm</h4>
+
+    <p>
+        SSD measures the pixel-wise differences between two images. It computes the sum of 
+        squared differences across all pixels:
+    </p>
+
+    <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <code>SSD = Σ<sub>(x,y)</sub> (image1(x,y) - image2(x,y))²</code>
+    </div>
+
+    <p>
+        <strong>How it works:</strong> For each possible shift (dx, dy), I compute the SSD 
+        between the shifted channel and the reference channel. The shift with the 
+        <strong>minimum SSD</strong> represents the best alignment.
+    </p>
+
+
+    <h4>2. NCC (Normalized Cross-Correlation)</h4>
+
+    <p>
+        NCC measures the similarity between two images by computing the dot product of 
+        normalized image vectors. As described in the assignment, this is:
+    </p>
+
+    <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <code>NCC = (image1 / ||image1||) · (image2 / ||image2||)</code>
+    </div>
+
+    <p>
+        In my implementation, I use the statistically normalized version (Pearson correlation), 
+        which is mathematically equivalent:
+    </p>
+
+    <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <code>NCC = Σ [(img1 - μ₁)/σ₁] × [(img2 - μ₂)/σ₂]</code><br>
+        <small style="color: #666;">where μ is mean, σ is standard deviation</small>
+    </div>
+
+    <p>
+        <strong>How it works:</strong> For each possible shift, I normalize both images 
+        by subtracting their mean and dividing by their standard deviation. This removes 
+        brightness and contrast differences, leaving only structural information. I then 
+        compute the dot product of these normalized vectors. The shift with the 
+        <strong>maximum NCC</strong> represents the best alignment.
+    </p>
+    
+    
+    <h3>Implementation Details</h3>
+    <ul>
+        <li><strong>Simple Alignment:</strong> Exhaustive search over a [-15, 15] pixel window using SSD metric</li>
+        <li><strong>Pyramid Alignment:</strong> Coarse-to-fine multi-scale alignment using SSD metric</li>
+        <li><strong>Simple Alignment:</strong> Exhaustive Search with NCC: More robust to brightness differences</li>
+        <li><strong>Pyramid Alignment:</strong> Coarse-to-fine multi-scale alignment using NCC metric.</li>
+    </ul>
+
+    <ul>
+        <li>Split images into three equal thirds (B, G, R channels)</li>
+        <li>Align G and R channels to B channel (reference)</li>
+        <li>Use <code>np.roll()</code> for efficient image shifting</li>
+        <li>Crop 20-pixel borders before computing alignment metrics</li>
+    </ul>
+
+    <h2>Results</h2>
+
+    <h3>Low-Resolution Images (Simple Alignment with SSD)</h3>
+    <p>Results using single-scale alignment with SSD metric on .jpg files:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Image</th>
+                <th>G Offset (x, y)</th>
+                <th>R Offset (x, y)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>cathedral.jpg</td>
+                <td class="offset-info">(2, 5)</td>
+                <td class="offset-info">(3, 12)</td>
+            </tr>
+            <tr>
+                <td>monastery.jpg</td>
+                <td class="offset-info">(2, -3)</td>
+                <td class="offset-info">(2, 3)</td>
+            </tr>
+            <tr>
+                <td>tobolsk.jpg</td>
+                <td class="offset-info">(2, 3)</td>
+                <td class="offset-info">(3, 6)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="image-grid">
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/cathedral_simple.jpg" alt="Cathedral">
+            <div class="caption">cathedral.jpg<br>G:(2,5) R:(3,12)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/monastery_simple.jpg" alt="Monastery">
+            <div class="caption">monastery.jpg<br>G:(2,-3) R:(2,3)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/tobolsk_simple.jpg" alt="Tobolsk">
+            <div class="caption">tobolsk.jpg<br>G:(2,3) R:(3,6)</div>
+        </div>
+    </div>
+
+    <h3>High-Resolution Images (Pyramid Alignment with SSD)</h3>
+    <p>Results using multi-scale pyramid alignment on .tif files:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Image</th>
+                <th>G Offset (x, y)</th>
+                <th>R Offset (x, y)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>church.tif</td>
+                <td class="offset-info">(-6, 22)</td>
+                <td class="offset-info">(210, 54)</td>
+            </tr>
+            <tr>
+                <td>emir.tif</td>
+                <td class="offset-info">(23, 49)</td>
+                <td class="offset-info">(40, 107)</td>
+            </tr>
+            <tr>
+                <td>harvestors.tif</td>
+                <td class="offset-info">(10, 59)</td>
+                <td class="offset-info">(7, 121)</td>
+            </tr>
+            <tr>
+                <td>icon.tif</td>
+                <td class="offset-info">(16, 41)</td>
+                <td class="offset-info">(22, 89)</td>
+            </tr>
+            <tr>
+                <td>italil.tif</td>
+                <td class="offset-info">(18, 38)</td>
+                <td class="offset-info">(34, 77)</td>
+            </tr>
+            <tr>
+                <td>lastochikino.tif</td>
+                <td class="offset-info">(-2, -3)</td>
+                <td class="offset-info">(-7, 73)</td>
+            </tr>
+            <tr>
+                <td>lugano.tif</td>
+                <td class="offset-info">(-12, 38)</td>
+                <td class="offset-info">(-28, 93)</td>
+            </tr>
+            <tr>
+                <td>melons.tif</td>
+                <td class="offset-info">(4, 83)</td>
+                <td class="offset-info">(7, 174)</td>
+            </tr>
+            <tr>
+                <td>self_portrait.tif</td>
+                <td class="offset-info">(10, 76)</td>
+                <td class="offset-info">(18, 168)</td>
+            </tr>
+            <tr>
+                <td>siren.tif</td>
+                <td class="offset-info">(-7, 48)</td>
+                <td class="offset-info">(-19, 103)</td>
+            </tr>
+            <tr>
+                <td>three_generations.tif</td>
+                <td class="offset-info">(5, 52)</td>
+                <td class="offset-info">(7, 110)</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div class="image-grid">
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/church_pyramid.jpg" alt="Church">
+            <div class="caption">church.tif<br>G:(-6, 22), R:(210, 54)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/emir_pyramid_edges.jpg" alt="Emir">
+            <div class="caption">emir.tif<br>G:(23, 49), R:(40, 107)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/harvesters_pyramid.jpg" alt="Harvesters">
+            <div class="caption">harvesters.tif<br>G:(10, 59), R:(7, 121)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/icon_pyramid.jpg" alt="Icon">
+            <div class="caption">icon.tif<br>G:(16, 41), R:(22, 89)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/italil_pyramid.jpg" alt="Italil">
+            <div class="caption">italil.tif<br>G:(18, 38), R:(34, 77)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/lastochikino_pyramid.jpg" alt="Lastochikino">
+            <div class="caption">lastochikino.tif<br>G:(-2, -3), R:(-7, 73)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/lugano_pyramid.jpg" alt="Lugano">
+            <div class="caption">lugano.tif<br>G:(-12, 38), R:(-28, 93)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/melons_pyramid.jpg" alt="Melons">
+            <div class="caption">melons.tif<br>G:(4, 83), R:(7, 174)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/self_portrait_pyramid.jpg" alt="Self Portrait">
+            <div class="caption">self_portrait.tif<br>G:(10, 76), R:(18, 168)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/siren_pyramid.jpg" alt="Siren">
+            <div class="caption">siren.tif<br>G:(-7, 48), R:(-19, 103)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/three_generations_pyramid.jpg" alt="Three Generations">
+            <div class="caption">three_generations.tif<br>G:(5, 52), R:(7, 110)</div>
+        </div>
+    </div>
+
+
+    <h3>Low-Resolution Images (Simple Alignment with NCC)</h3>
+    <p>Results using single-scale alignment with NCC metric on .jpg files:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Image</th>
+                <th>G Offset (x, y)</th>
+                <th>R Offset (x, y)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>cathedral.jpg</td>
+                <td class="offset-info">(2, 5)</td>
+                <td class="offset-info">(3, 12)</td>
+            </tr>
+            <tr>
+                <td>monastery.jpg</td>
+                <td class="offset-info">(2, -3)</td>
+                <td class="offset-info">(2, 3)</td>
+            </tr>
+            <tr>
+                <td>tobolsk.jpg</td>
+                <td class="offset-info">(2, 3)</td>
+                <td class="offset-info">(3, 6)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="image-grid">
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/cathedral_simple_ncc.jpg" alt="Cathedral">
+            <div class="caption">cathedral.jpg<br>G:(2,5) R:(3,12)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/monastery_simple_ncc.jpg" alt="Monastery">
+            <div class="caption">monastery.jpg<br>G:(2,-3) R:(2,3)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/tobolsk_simple_ncc.jpg" alt="Tobolsk">
+            <div class="caption">tobolsk.jpg<br>G:(2,3) R:(3,6)</div>
+        </div>
+    </div>
+
+    <h3>High-Resolution Images (Pyramid Alignment with NCC)</h3>
+    <p>Results using multi-scale pyramid alignment with NCC metric on .tif files:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Image</th>
+                <th>G Offset (x, y)</th>
+                <th>R Offset (x, y)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>church.tif</td>
+                <td class="offset-info">(-4, 23)</td>
+                <td class="offset-info">(-10, 52)</td>
+            </tr>
+            <tr>
+                <td>emir.tif</td>
+                <td class="offset-info">(23, 49)</td>
+                <td class="offset-info">(40, 107)</td>
+            </tr>
+            <tr>
+                <td>harvestors.tif</td>
+                <td class="offset-info">(10, 59)</td>
+                <td class="offset-info">(8, 122)</td>
+            </tr>
+            <tr>
+                <td>icon.tif</td>
+                <td class="offset-info">(16, 41)</td>
+                <td class="offset-info">(22, 90)</td>
+            </tr>
+            <tr>
+                <td>italil.tif</td>
+                <td class="offset-info">(18, 38)</td>
+                <td class="offset-info">(34, 77)</td>
+            </tr>
+            <tr>
+                <td>lastochikino.tif</td>
+                <td class="offset-info">(-2, -3)</td>
+                <td class="offset-info">(-7, 73)</td>
+            </tr>
+            <tr>
+                <td>lugano.tif</td>
+                <td class="offset-info">(-12, 38)</td>
+                <td class="offset-info">(-28, 92)</td>
+            </tr>
+            <tr>
+                <td>melons.tif</td>
+                <td class="offset-info">(4, 83)</td>
+                <td class="offset-info">(7, 173)</td>
+            </tr>
+            <tr>
+                <td>self_portrait.tif</td>
+                <td class="offset-info">(10, 76)</td>
+                <td class="offset-info">(30, 171)</td>
+            </tr>
+            <tr>
+                <td>siren.tif</td>
+                <td class="offset-info">(-7, 48)</td>
+                <td class="offset-info">(-21, 98)</td>
+            </tr>
+            <tr>
+                <td>three_generations.tif</td>
+                <td class="offset-info">(5, 52)</td>
+                <td class="offset-info">(7, 110)</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div class="image-grid">
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/church_pyramid_ncc.jpg" alt="Church">
+            <div class="caption">church.tif<br>G:(-4, 23), R:(-10, 52)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/emir_pyramid_edges_ncc.jpg" alt="Emir">
+            <div class="caption">emir.tif<br>G:(23, 49), R:(40, 107)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/harvesters_pyramid_ncc.jpg" alt="Harvesters">
+            <div class="caption">harvesters.tif<br>G:(10, 59), R:(8, 122)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/icon_pyramid_ncc.jpg" alt="Icon">
+            <div class="caption">icon.tif<br>G:(16, 41), R:(22, 90)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/italil_pyramid_ncc.jpg" alt="Italil">
+            <div class="caption">italil.tif<br>G:(18, 38), R:(34, 77)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/lastochikino_pyramid_ncc.jpg" alt="Lastochikino">
+            <div class="caption">lastochikino.tif<br>G:(-2, -3), R:(-7, 73)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/lugano_pyramid_ncc.jpg" alt="Lugano">
+            <div class="caption">lugano.tif<br>G:(-12, 38), R:(-28, 92)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/melons_pyramid_ncc.jpg" alt="Melons">
+            <div class="caption">melons.tif<br>G:(4, 83), R:(7, 173)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/self_portrait_pyramid_ncc.jpg" alt="Self Portrait">
+            <div class="caption">self_portrait.tif<br>G:(10, 76), R:(30, 171)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/siren_pyramid_ncc.jpg" alt="Siren">
+            <div class="caption">siren.tif<br>G:(-7, 48), R:(-21, 98)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/three_generations_pyramid_ncc.jpg" alt="Three Generations">
+            <div class="caption">three_generations.tif<br>G:(5, 52), R:(7, 110)</div>
+        </div>
+    </div>    
+
+    <h2>Bells & Whistles</h2>
+    
+    <div class="comparison">
+        <h3>1. Better Features: Edge-Based Alignment</h3>
+        <p>
+            The emir.tif image is known for having extreme brightness differences between channels 
+            (bright blue robes in blue channel, dark in red channel). My implementation automatically 
+            applies edge-based features to this image even in the "basic" configurations to ensure 
+            successful alignment.
+        </p>
+        <p>
+            <strong>Problem:</strong> Basic SSD alignment fails on emir.tif because the color 
+            channels have very different brightness values, leading to poor pixel-wise matches.
+        </p>
+        <p>
+            <strong>Solution:</strong> By using edge-detected versions of the images (Sobel filter), 
+            the alignment focuses on structural features rather than raw pixel intensities, 
+            allowing successful alignment.
+        </p>      
+    </div>
+
+    <div class="comparison">
+        <h3>2. Normalized Cross-Correlation (NCC)</h3>
+        <p>
+            NCC is more robust to brightness differences than SSD. I implemented both metrics 
+            and found NCC generally performs better, especially when combined with edge features.
+        </p>
+        <p>
+            <strong>Problem:</strong> The church.tif image fails with basic SSD because the three 
+            color channels have very different brightness values due to the colored architecture 
+            and blue sky.
+        </p>
+        <p>
+            <strong>Solution:</strong> By switching from SSD to Normalized Cross-Correlation (NCC), the alignment succeeds 
+            because NCC normalizes out brightness differences and focuses on structural correlation.
+        </p>
+        <div class="image-grid">
+            <div class="image-container">
+                <img src="../outputs/01_basic_ssd/church_pyramid.jpg" alt="Church - SSD">
+                <div class="caption">Church with SSD</div>
+            </div>
+            <div class="image-container">
+                <img src="../outputs/02_basic_ncc/church_pyramid_ncc.jpg" alt="Church - NCC">
+                <div class="caption">Church with NCC</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="comparison">
+        <h3>3. Automatic Border Cropping</h3>
+        <p>
+            The aligned images have colored borders where channels don't overlap perfectly. 
+            I implemented automatic border detection using edge detection to find where the 
+            actual image content begins.
+        </p>
+    </div>
+
+    <div class="comparison">
+        <h3>4. Automatic Contrast Enhancement</h3>
+        <p>
+            Rescales intensities so the darkest pixel maps to 0 and the brightest to 255. 
+            Uses percentiles to be robust to outliers.
+        </p>
+    </div>
+
+    <div class="comparison">
+        <h3>5. Automatic White Balance</h3>
+        <p>
+            Corrects color casts using the "gray world" assumption - that the average color 
+            in the image should be neutral gray. This produces more natural-looking colors.
+        </p>
+    </div>
+
+    <h2>Gallery</h2>
+    <p>Complete gallery of all processed images with full enhancements:</p>
+    
+    <div class="image-grid">
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/cathedral_simple_edges_ncc_enhanced.jpg" alt="Cathedral Enhanced">
+            <div class="caption">cathedral.jpg</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/church_pyramid_edges_ncc_enhanced.jpg" alt="Church Enhanced">
+            <div class="caption">church.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/emir_pyramid_edges_ncc_enhanced.jpg" alt="Emir Enhanced">
+            <div class="caption">emir.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/harvesters_pyramid_edges_ncc_enhanced.jpg" alt="Harvesters Enhanced">
+            <div class="caption">harvesters.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/icon_pyramid_edges_ncc_enhanced.jpg" alt="Icon Enhanced">
+            <div class="caption">icon.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/italil_pyramid_edges_ncc_enhanced.jpg" alt="Italil Enhanced">
+            <div class="caption">italil.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/lastochikino_pyramid_edges_ncc_enhanced.jpg" alt="Lastochikino Enhanced">
+            <div class="caption">lastochikino.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/lugano_pyramid_edges_ncc_enhanced.jpg" alt="Lugano Enhanced">
+            <div class="caption">lugano.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/melons_pyramid_edges_ncc_enhanced.jpg" alt="Melons Enhanced">
+            <div class="caption">melons.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/monastery_simple_edges_ncc_enhanced.jpg" alt="Monastery Enhanced">
+            <div class="caption">monastery.jpg</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/self_portrait_pyramid_edges_ncc_enhanced.jpg" alt="Self Portrait Enhanced">
+            <div class="caption">self_portrait.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/siren_pyramid_edges_ncc_enhanced.jpg" alt="Siren Enhanced">
+            <div class="caption">siren.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/three_generations_pyramid_edges_ncc_enhanced.jpg" alt="Three Generations Enhanced">
+            <div class="caption">three_generations.tif</div>
+        </div>
+    
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/tobolsk_simple_edges_ncc_enhanced.jpg" alt="Tobolsk Enhanced">
+            <div class="caption">tobolsk.jpg</div>
+        </div>
+    </div>
+
+    <h2>Additional Images from Prokudin-Gorskii Collection</h2>
+    <p>Results of NSS and SSD metrics before and after enhancements on three additional images from the Prokudin-Gorskii collection:</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Image</th>
+                <th>Method</th>
+                <th>G Offset (x, y)</th>
+                <th>R Offset (x, y)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>liesnaia doroga.tif</td>
+                <td>SSD</td>
+                <td class="offset-info">(-23, 26)</td>
+                <td class="offset-info">(2, -202)</td>
+            </tr>
+            <tr>
+                <td>liesnaia doroga.tif</td>
+                <td>NCC</td>
+                <td class="offset-info">(-26, 30)</td>
+                <td class="offset-info">(5, 99)</td>
+            </tr>
+            <tr>
+                <td>liesnaia doroga.tif</td>
+                <td>NCC + enhancements</td>
+                <td class="offset-info">(-36, 40)</td>
+                <td class="offset-info">(4, 97)</td>
+            </tr>
+            <tr>
+                <td>mukhomor.tif</td>
+                <td>SSD</td>
+                <td class="offset-info">(15, 37)</td>
+                <td class="offset-info">(31, 84)</td>
+            </tr>
+             <tr>
+                <td>mukhomor.tif</td>
+                <td>NCC</td>
+                <td class="offset-info">(15, 37)</td>
+                <td class="offset-info">(31, 84)</td>
+            </tr>
+             <tr>
+                <td>mukhomor.tif</td>
+                <td>NCC + enhancements</td>
+                <td class="offset-info">(16, 38)</td>
+                <td class="offset-info">(31, 84)</td>
+            </tr>
+            <tr>
+                <td>piony.tif</td>
+                <td>SSD</td>
+                <td class="offset-info">(1, 50)</td>
+                <td class="offset-info">(-7, 103)</td>
+            </tr>
+            <tr>
+                <td>piony.tif</td>
+                <td>NCC</td>
+                <td class="offset-info">(1, 50)</td>
+                <td class="offset-info">(-7, 103)</td>
+            </tr>
+            <tr>
+                <td>piony.tif</td>
+                <td>NCC + enhancements</td>
+                <td class="offset-info">(3, 52)</td>
+                <td class="offset-info">(-5, 104)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="image-grid">
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/liesnaia doroga_pyramid.jpg" alt="Liesnaia Doroga">
+            <div class="caption">liesnaia doroga with SSD<br>G:(-23, 26), R:(2, -202)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/liesnaia doroga_pyramid_ncc.jpg" alt="Liesnaia Doroga">
+            <div class="caption">liesnaia doroga with NCC<br>G:(-26, 30), R:(5, 99)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/liesnaia doroga_pyramid_edges_ncc_enhanced.jpg" alt="Liesnaia Doroga">
+            <div class="caption">liesnaia doroga with enhancements<br>G:(-36, 39), R:(4, 97)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/mukhomor_pyramid.jpg" alt="Mukhomor">
+            <div class="caption">mukhomor with SSD<br>G:(15, 37) R:(31, 84)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/mukhomor_pyramid_ncc.jpg" alt="Mukhomor">
+            <div class="caption">mukhomor with NCC<br>G:(15, 37) R:(31, 84)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/mukhomor_pyramid_edges_ncc_enhanced.jpg" alt="Mukhomor">
+            <div class="caption">mukhomor with enhancements<br>G:(16, 38) R:(31, 84)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/01_basic_ssd/piony_pyramid.jpg" alt="Piony">
+            <div class="caption">piony with SSD<br>G:(1, 50) R:(-7, 103)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/02_basic_ncc/piony_pyramid_ncc.jpg" alt="Piony">
+            <div class="caption">piony with NCC<br>G:(1, 50) R:(-7, 103)</div>
+        </div>
+        <div class="image-container">
+            <img src="../outputs/04_enhanced_ncc/piony_pyramid_edges_ncc_enhanced.jpg" alt="Piony">
+            <div class="caption">piony with enhancements<br>G:(3, 52) R:(-5, 104)</div>
+        </div>
+    </div>
+
+</body>
+</html>
